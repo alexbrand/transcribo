@@ -7,8 +7,8 @@ import Foundation
 /// This class provides the public API that the rest of the app depends on;
 /// the runtime implementation will be swapped in behind this interface.
 public final class TranscriptionEngine {
-    private let modelManager = ModelManager()
-    private var isLoaded = false
+    private let modelManager: ModelManager
+    private(set) var isLoaded = false
     private var sessionStartTime: Date?
     private var language: String
 
@@ -28,8 +28,9 @@ public final class TranscriptionEngine {
         ("zh", "Chinese"),
     ]
 
-    public init(language: String = "en") {
+    public init(language: String = "en", modelManager: ModelManager = ModelManager()) {
         self.language = language
+        self.modelManager = modelManager
     }
 
     /// Load the model into GPU memory. Call once at app launch.

@@ -2,21 +2,26 @@ import Foundation
 
 /// Manages downloading, caching, and verifying the Voxtral model weights.
 public final class ModelManager {
-    /// The directory where model files are stored.
-    public static let modelDirectory: URL = {
+    /// Default directory where model files are stored.
+    public static let defaultModelDirectory: URL = {
         let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
         return appSupport.appendingPathComponent("Transcribo/models", isDirectory: true)
     }()
+
+    /// The directory where model files are stored (injectable for testing).
+    public let modelDirectory: URL
 
     /// The expected SHA-256 checksum of the model file.
     /// TODO: Replace with actual checksum once model is finalized.
     private static let expectedChecksum = ""
 
-    public init() {}
+    public init(modelDirectory: URL? = nil) {
+        self.modelDirectory = modelDirectory ?? Self.defaultModelDirectory
+    }
 
     /// Whether the model is already downloaded and valid.
     public var isModelAvailable: Bool {
-        let modelPath = Self.modelDirectory.appendingPathComponent("voxtral.mlx")
+        let modelPath = modelDirectory.appendingPathComponent("voxtral.mlx")
         return FileManager.default.fileExists(atPath: modelPath.path)
     }
 
@@ -26,7 +31,7 @@ public final class ModelManager {
         completion: @escaping (Result<URL, Error>) -> Void
     ) {
         // Ensure the model directory exists
-        try? FileManager.default.createDirectory(at: Self.modelDirectory, withIntermediateDirectories: true)
+        try? FileManager.default.createDirectory(at: modelDirectory, withIntermediateDirectories: true)
 
         // TODO: Replace with actual model URL
         guard let url = URL(string: "https://models.example.com/voxtral/voxtral.mlx") else {
@@ -34,7 +39,7 @@ public final class ModelManager {
             return
         }
 
-        let destination = Self.modelDirectory.appendingPathComponent("voxtral.mlx")
+        let destination = modelDirectory.appendingPathComponent("voxtral.mlx")
 
         let task = URLSession.shared.downloadTask(with: url) { tempURL, _, error in
             DispatchQueue.main.async {
@@ -75,7 +80,7 @@ public final class ModelManager {
 
     /// Remove downloaded model files.
     public func deleteModel() throws {
-        let modelPath = Self.modelDirectory.appendingPathComponent("voxtral.mlx")
+        let modelPath = modelDirectory.appendingPathComponent("voxtral.mlx")
         if FileManager.default.fileExists(atPath: modelPath.path) {
             try FileManager.default.removeItem(at: modelPath)
         }
