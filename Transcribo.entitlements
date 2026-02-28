@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Microphone access for audio capture -->
+	<key>com.apple.security.device.audio-input</key>
+	<true/>
+	<!-- Accessibility API access for text injection and global shortcuts -->
+	<key>com.apple.security.automation.apple-events</key>
+	<true/>
+	<!-- Network access for initial model download -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- Read/write to Application Support for model storage -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>

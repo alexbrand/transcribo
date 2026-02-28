@@ -1,0 +1,41 @@
+# Xcode
+*.xcodeproj/xcuserdata/
+*.xcworkspace/xcuserdata/
+*.xcodeproj/project.xcworkspace/xcshareddata/IDEWorkspaceChecks.plist
+DerivedData/
+*.moved-aside
+*.ipa
+*.dSYM.zip
+*.dSYM
+xcuserdata/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# macOS
+.DS_Store
+*.swp
+*~
+
+# Build artifacts
+build/
+*.app
+*.dmg
+*.zip
+*.pkg
+
+# Model weights (downloaded at runtime)
+Models/
+
+# IDE
+.idea/
+.vscode/
+*.code-workspace
+
+# Secrets (never commit)
+.env
+*.p12
+*.mobileprovision
+*.provisionprofile
