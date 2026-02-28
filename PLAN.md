@@ -1,6 +1,6 @@
 # Transcribo — Implementation Plan
 
-This plan breaks the Transcribo build into seven sequential milestones. Each milestone is self-contained and produces a testable artifact. Later milestones depend on earlier ones.
+This plan breaks the Transcribo build into eight sequential milestones. Each milestone is self-contained and produces a testable artifact. Later milestones depend on earlier ones.
 
 -----
 
@@ -23,7 +23,54 @@ This plan breaks the Transcribo build into seven sequential milestones. Each mil
 
 -----
 
-## Milestone 1: Menu Bar Agent & Global Shortcut
+## Milestone 1: CI/CD (GitHub Actions)
+
+**Goal:** Establish continuous integration so every push and PR is automatically built and tested on Apple Silicon.
+
+### 1.1 Build Workflow (`.github/workflows/build.yml`)
+
+- [ ] Trigger on: push to `main`, pull requests targeting `main`.
+- [ ] Runner: `macos-15` (Apple Silicon).
+- [ ] Steps:
+  1. Checkout repo.
+  2. Select Xcode version (`sudo xcode-select -s`).
+  3. Resolve Swift Package dependencies (`xcodebuild -resolvePackageDependencies`).
+  4. Build the project (`xcodebuild build`).
+  5. Run unit tests (`xcodebuild test`).
+- [ ] Cache SPM dependencies (`~/Library/Developer/Xcode/DerivedData` and `.build`) to speed up builds.
+- [ ] Fail the workflow on any compiler warning (`SWIFT_TREAT_WARNINGS_AS_ERRORS=YES`).
+
+### 1.2 Lint Workflow (`.github/workflows/lint.yml`)
+
+- [ ] Trigger on: push to `main`, pull requests targeting `main`.
+- [ ] Run **SwiftLint** (install via Homebrew on the runner).
+- [ ] Add a `.swiftlint.yml` config to the repo with project-appropriate rules.
+- [ ] Fail the workflow on any lint violation.
+
+### 1.3 Release Workflow (`.github/workflows/release.yml`)
+
+- [ ] Trigger on: push of a version tag (`v*.*.*`).
+- [ ] Build a release archive (`xcodebuild archive`).
+- [ ] Export the archive as a signed `.app` bundle.
+- [ ] Notarize the app using `notarytool` (Apple ID credentials stored as GitHub Actions secrets).
+- [ ] Package the notarized app into a DMG.
+- [ ] Create a GitHub Release and attach the DMG as an artifact.
+
+### 1.4 Secrets & Configuration
+
+- [ ] Store in GitHub Actions secrets:
+  - `APPLE_DEVELOPER_ID_CERTIFICATE` — base64-encoded signing certificate.
+  - `APPLE_DEVELOPER_ID_PASSWORD` — certificate passphrase.
+  - `APPLE_ID` — Apple ID for notarization.
+  - `APPLE_ID_PASSWORD` — app-specific password for notarization.
+  - `APPLE_TEAM_ID` — developer team identifier.
+- [ ] Document the required secrets in the repo README or a `CONTRIBUTING.md`.
+
+**Exit criteria:** Pushes to `main` trigger build + test + lint. Tagged releases produce a notarized DMG attached to a GitHub Release.
+
+-----
+
+## Milestone 2: Menu Bar Agent & Global Shortcut
 
 **Goal:** Ship the always-running menu bar shell with a working global hotkey.
 
@@ -44,7 +91,7 @@ This plan breaks the Transcribo build into seven sequential milestones. Each mil
 
 -----
 
-## Milestone 2: Audio Capture
+## Milestone 3: Audio Capture
 
 **Goal:** Capture microphone audio in real time and produce buffers suitable for the inference engine.
 
@@ -60,7 +107,7 @@ This plan breaks the Transcribo build into seven sequential milestones. Each mil
 
 -----
 
-## Milestone 3: Inference Engine (Local Voxtral)
+## Milestone 4: Inference Engine (Local Voxtral)
 
 **Goal:** Run the Voxtral speech-to-text model on-device with streaming output.
 
@@ -94,7 +141,7 @@ This plan breaks the Transcribo build into seven sequential milestones. Each mil
 
 -----
 
-## Milestone 4: Text Injection
+## Milestone 5: Text Injection
 
 **Goal:** Insert transcribed text into the focused text field of any macOS application.
 
@@ -120,7 +167,7 @@ This plan breaks the Transcribo build into seven sequential milestones. Each mil
 
 -----
 
-## Milestone 5: Settings & History
+## Milestone 6: Settings & History
 
 **Goal:** Build the preferences window and transcription history log.
 
@@ -155,7 +202,7 @@ This plan breaks the Transcribo build into seven sequential milestones. Each mil
 
 -----
 
-## Milestone 6: First-Launch Onboarding
+## Milestone 7: First-Launch Onboarding
 
 **Goal:** Guide new users through setup so the app is fully functional after onboarding.
 
@@ -173,7 +220,7 @@ This plan breaks the Transcribo build into seven sequential milestones. Each mil
 
 -----
 
-## Milestone 7: Polish & Release Prep
+## Milestone 8: Polish & Release Prep
 
 **Goal:** Harden the app for public release.
 
@@ -213,16 +260,17 @@ This plan breaks the Transcribo build into seven sequential milestones. Each mil
 
 ```
 M0 (Scaffolding)
- └── M1 (Menu Bar + Shortcut)
-      ├── M2 (Audio Capture)
-      │    └── M3 (Inference Engine)
-      │         └── M4 (Text Injection)
-      │              └── M7 (Polish)
-      ├── M5 (Settings & History)
-      └── M6 (Onboarding)
+ ├── M1 (CI/CD)
+ └── M2 (Menu Bar + Shortcut)
+      ├── M3 (Audio Capture)
+      │    └── M4 (Inference Engine)
+      │         └── M5 (Text Injection)
+      │              └── M8 (Polish)
+      ├── M6 (Settings & History)
+      └── M7 (Onboarding)
 ```
 
-M5 and M6 can be developed in parallel with M3/M4 once M1 is complete.
+M1 (CI/CD) should be set up immediately after M0 so all subsequent milestones benefit from automated builds and tests. M6 and M7 can be developed in parallel with M4/M5 once M2 is complete.
 
 -----
 
@@ -230,7 +278,7 @@ M5 and M6 can be developed in parallel with M3/M4 once M1 is complete.
 
 |Decision|Options|Resolve by|
 |--------|-------|----------|
-|Inference runtime|MLX-Swift vs llama.cpp|End of M3 prototype|
-|Persistence layer|SwiftData vs raw SQLite|Start of M5|
-|Default shortcut key|Right Option, Fn, Globe, or other|User testing during M6|
-|Mac App Store feasibility|Sandbox-compatible or direct-only|During M7|
+|Inference runtime|MLX-Swift vs llama.cpp|End of M4 prototype|
+|Persistence layer|SwiftData vs raw SQLite|Start of M6|
+|Default shortcut key|Right Option, Fn, Globe, or other|User testing during M7|
+|Mac App Store feasibility|Sandbox-compatible or direct-only|During M8|
