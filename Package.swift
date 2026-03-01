@@ -13,6 +13,10 @@ let package = Package(
         .library(name: "InferenceEngine", targets: ["InferenceEngine"]),
         .library(name: "TextInjection", targets: ["TextInjection"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/Blaizzy/mlx-audio-swift.git", branch: "main"),
+        .package(url: "https://github.com/huggingface/swift-huggingface.git", from: "0.6.0"),
+    ],
     targets: [
         // Main app target
         .executableTarget(
@@ -37,6 +41,11 @@ let package = Package(
         // Inference engine library
         .target(
             name: "InferenceEngine",
+            dependencies: [
+                .product(name: "MLXAudioSTT", package: "mlx-audio-swift"),
+                .product(name: "MLXAudioCore", package: "mlx-audio-swift"),
+                .product(name: "HuggingFace", package: "swift-huggingface"),
+            ],
             path: "Sources/InferenceEngine"
         ),
 

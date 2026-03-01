@@ -1,21 +1,32 @@
 import AVFoundation
 import Foundation
+import MLX
+import MLXAudioSTT
+import OSLog
 
-/// Runs the Voxtral model locally and produces streaming transcription tokens from audio buffers.
+/// Runs the Voxtral Realtime model locally and produces transcription tokens from audio buffers.
 ///
-/// The specific inference runtime (MLX, llama.cpp, or custom) is TBD.
-/// This class provides the public API that the rest of the app depends on;
-/// the runtime implementation will be swapped in behind this interface.
+/// Audio buffers are accumulated during a push-to-talk session. When `finalize()` is called
+/// (user releases the key), the accumulated audio is sent to the model for transcription
+/// and the result is emitted via the `onToken` callback.
+///
+/// The model is injected externally via `setModel(_:)` — ModelManager owns the download/load lifecycle.
 public final class TranscriptionEngine {
-    private let modelManager: ModelManager
-    private(set) var isLoaded = false
+    private static let logger = Logger(subsystem: "Transcribo", category: "TranscriptionEngine")
+    private var model: VoxtralRealtimeModel?
     private var sessionStartTime: Date?
     private var language: String
+
+    /// Accumulated audio samples (16 kHz mono Float32) for the current session.
+    private var audioBuffer: [Float] = []
 
     /// Callback invoked on the main queue with each transcription token.
     public var onToken: ((TranscriptionToken) -> Void)?
 
-    /// Languages supported by the model.
+    /// Whether a model has been injected and is ready for inference.
+    public var isLoaded: Bool { model != nil }
+
+    /// Languages supported by the Voxtral Realtime model.
     public static let supportedLanguages: [(code: String, name: String)] = [
         ("en", "English"),
         ("es", "Spanish"),
@@ -28,63 +39,84 @@ public final class TranscriptionEngine {
         ("zh", "Chinese"),
     ]
 
-    public init(language: String = "en", modelManager: ModelManager = ModelManager()) {
+    public init(language: String = "en") {
         self.language = language
-        self.modelManager = modelManager
     }
 
-    /// Load the model into GPU memory. Call once at app launch.
-    public func loadModel() throws {
-        guard modelManager.isModelAvailable else {
-            throw ModelError.modelNotFound
-        }
-
-        // TODO: Initialize the inference runtime and load model weights into Metal GPU memory.
-        // This is where we'll plug in MLX-Swift or llama.cpp.
-        isLoaded = true
+    /// Inject or replace the loaded model. Called by AppDelegate when ModelManager reaches `.ready`.
+    public func setModel(_ model: VoxtralRealtimeModel?) {
+        self.model = model
     }
 
-    /// Unload the model from GPU memory. Call at app termination.
-    public func unloadModel() {
-        // TODO: Release Metal resources and model weights.
-        isLoaded = false
-    }
-
-    /// Set the active transcription language.
+    /// Set the active transcription language using an ISO 639-1 code (e.g. "en", "fr").
     public func setLanguage(_ code: String) {
         language = code
     }
 
     /// Process a single audio buffer. Call this repeatedly as buffers arrive from AudioCaptureSession.
+    /// Buffers are accumulated and transcribed when `finalize()` is called.
     public func processAudioBuffer(_ buffer: AVAudioPCMBuffer) {
         if sessionStartTime == nil {
             sessionStartTime = Date()
         }
 
-        // TODO: Feed the buffer to the inference runtime.
-        // On partial results, emit tokens via onToken callback:
-        //
-        // let token = TranscriptionToken(
-        //     text: partialText,
-        //     isFinal: false,
-        //     confidence: score,
-        //     timestamp: Date().timeIntervalSince(sessionStartTime!)
-        // )
-        // DispatchQueue.main.async { self.onToken?(token) }
+        guard let channelData = buffer.floatChannelData?[0] else { return }
+        let frameCount = Int(buffer.frameLength)
+        let samples = Array(UnsafeBufferPointer(start: channelData, count: frameCount))
+        audioBuffer.append(contentsOf: samples)
     }
 
-    /// Signal that audio capture has stopped. Flushes any remaining audio and emits a final token.
+    /// Signal that audio capture has stopped. Runs inference on accumulated audio and emits
+    /// the transcription as a final token.
     public func finalize() {
         guard let start = sessionStartTime else { return }
+        guard let model = self.model, !audioBuffer.isEmpty else {
+            Self.logger.error("Finalize skipped: modelLoaded=\(self.model != nil, privacy: .public), audioSamples=\(self.audioBuffer.count, privacy: .public)")
+            sessionStartTime = nil
+            audioBuffer.removeAll()
+            return
+        }
 
-        // TODO: Flush the inference runtime's internal buffer and emit the final token.
-        let finalToken = TranscriptionToken(
-            text: "",
-            isFinal: true,
-            timestamp: Date().timeIntervalSince(start)
-        )
-        DispatchQueue.main.async { self.onToken?(finalToken) }
+        let samples = audioBuffer
+        let lang = language
+        let elapsed = Date().timeIntervalSince(start)
+        Self.logger.log("Running transcription with \(samples.count, privacy: .public) samples, language=\(lang, privacy: .public), elapsed=\(elapsed, privacy: .public)s")
 
+        audioBuffer.removeAll()
         sessionStartTime = nil
+
+        // Run inference on a background thread since generate() is synchronous and blocking.
+        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+            Self.logger.log("Entered transcription worker thread")
+            let generationStart = Date()
+            let device = ComputeDeviceResolver.preferredDevice()
+            let output = Device.withDefaultDevice(device) {
+                Self.logger.log("Calling model.generate on \(ComputeDeviceResolver.deviceName(device), privacy: .public)")
+                let audio = MLXArray(samples)
+
+                let params = STTGenerateParameters(
+                    maxTokens: 256,
+                    temperature: 0.0,
+                    language: lang,
+                    chunkDuration: 30.0,
+                    minChunkDuration: 1.0
+                )
+
+                return model.generate(audio: audio, generationParameters: params)
+            }
+            let generationElapsed = Date().timeIntervalSince(generationStart)
+            Self.logger.log("model.generate completed in \(generationElapsed, privacy: .public)s")
+
+            let token = TranscriptionToken(
+                text: output.text,
+                isFinal: true,
+                timestamp: elapsed
+            )
+            Self.logger.log("Transcription finished. textLength=\(token.text.count, privacy: .public)")
+
+            DispatchQueue.main.async {
+                self?.onToken?(token)
+            }
+        }
     }
 }

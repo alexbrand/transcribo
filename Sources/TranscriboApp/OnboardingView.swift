@@ -1,14 +1,15 @@
 import SwiftUI
 import AudioCapture
+import InferenceEngine
 import TextInjection
 
 struct OnboardingView: View {
+    @Environment(ModelManager.self) private var modelManager
     @State private var currentStep = 0
     @State private var micPermissionGranted = false
     @State private var accessibilityGranted = false
-    @State private var modelDownloadProgress: Double = 0
-    @State private var modelDownloaded = false
-    @Environment(\.dismiss) private var dismiss
+    /// Callback to close the onboarding window when done.
+    let onComplete: () -> Void
 
     private let totalSteps = 5
 
@@ -52,7 +53,7 @@ struct OnboardingView: View {
                 Button(currentStep == totalSteps - 1 ? "Get Started" : "Continue") {
                     if currentStep == totalSteps - 1 {
                         UserDefaults.standard.set(true, forKey: "onboardingCompleted")
-                        dismiss()
+                        onComplete()
                     } else {
                         currentStep += 1
                     }
@@ -135,24 +136,55 @@ struct OnboardingView: View {
 
     private var modelDownloadStep: some View {
         VStack(spacing: 16) {
-            Image(systemName: modelDownloaded ? "checkmark.circle.fill" : "arrow.down.circle")
+            Image(systemName: modelManager.state == .ready ? "checkmark.circle.fill" : "arrow.down.circle")
                 .font(.system(size: 48))
-                .foregroundStyle(modelDownloaded ? .green : Color.accentColor)
+                .foregroundStyle(modelManager.state == .ready ? .green : Color.accentColor)
             Text("Download Model")
                 .font(.title2)
                 .bold()
-            Text("The Voxtral speech model will be downloaded to your Mac. This is a one-time download.")
+            Text("The Voxtral speech model will be downloaded to your Mac. This is a one-time download (~3.1 GB).")
                 .multilineTextAlignment(.center)
                 .foregroundStyle(.secondary)
 
-            if modelDownloaded {
+            switch modelManager.state {
+            case .ready:
                 Label("Model ready", systemImage: "checkmark.circle.fill")
                     .foregroundStyle(.green)
-            } else {
-                ProgressView(value: modelDownloadProgress)
-                    .padding(.horizontal, 40)
+            case .downloading:
+                VStack(spacing: 8) {
+                    ProgressView(value: modelManager.downloadProgress)
+                        .padding(.horizontal, 40)
+                    Text("\(Int(modelManager.downloadProgress * 100))%")
+                        .monospacedDigit()
+                        .foregroundStyle(.secondary)
+                    Text(modelManager.downloadStatus)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .multilineTextAlignment(.center)
+                }
+            case .loading:
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading model...")
+                        .foregroundStyle(.secondary)
+                }
+            case .downloaded:
+                Button("Load Model") {
+                    Task { await modelManager.loadModel() }
+                }
+            case .error(let msg):
+                VStack(spacing: 8) {
+                    Text(msg)
+                        .foregroundStyle(.red)
+                        .font(.caption)
+                    Button("Retry") {
+                        Task { await modelManager.downloadAndLoad() }
+                    }
+                }
+            case .notDownloaded:
                 Button("Download") {
-                    // TODO: Wire up ModelManager.downloadModel() (M4)
+                    Task { await modelManager.downloadAndLoad() }
                 }
             }
         }

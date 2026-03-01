@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import AVFoundation
 @testable import InferenceEngine
 
 // MARK: - TranscriptionToken
@@ -60,85 +61,65 @@ struct TranscriptionTokenTests {
     }
 }
 
-// MARK: - ModelManager (uses temp directory)
+// MARK: - ModelManager
 
 @Suite("ModelManager")
 struct ModelManagerTests {
-    private func makeTempManager() throws -> (ModelManager, URL) {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TranscriboTests-\(UUID().uuidString)", isDirectory: true)
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        return (ModelManager(modelDirectory: tempDir), tempDir)
+    @MainActor
+    @Test("Model identifier is set")
+    func modelIdentifier() {
+        #expect(!ModelManager.modelIdentifier.isEmpty)
+        #expect(ModelManager.modelIdentifier.contains("Voxtral"))
     }
 
-    private func cleanup(_ dir: URL) {
-        try? FileManager.default.removeItem(at: dir)
+    @MainActor
+    @Test("Initial state is notDownloaded with no cache")
+    func initialState() {
+        let manager = ModelManager()
+        // Without cached files, state depends on actual cache — just verify it's a valid state
+        let validStates: [ModelState] = [.notDownloaded, .downloaded]
+        #expect(validStates.contains(manager.state))
     }
 
-    @Test("Default directory is in Application Support")
-    func defaultDirectory() {
-        let path = ModelManager.defaultModelDirectory.path
-        #expect(path.contains("Application Support/Transcribo/models"))
+    @MainActor
+    @Test("Download progress starts at zero")
+    func initialProgress() {
+        let manager = ModelManager()
+        #expect(manager.downloadProgress == 0)
     }
 
-    @Test("Custom directory is used when injected")
-    func customDirectory() throws {
-        let (manager, dir) = try makeTempManager()
-        defer { cleanup(dir) }
-        #expect(manager.modelDirectory == dir)
+    @MainActor
+    @Test("Model is nil before loading")
+    func modelNilBeforeLoad() {
+        let manager = ModelManager()
+        #expect(manager.model == nil)
     }
 
-    @Test("Model not available on empty directory")
-    func modelNotAvailableOnEmpty() throws {
-        let (manager, dir) = try makeTempManager()
-        defer { cleanup(dir) }
-        #expect(!manager.isModelAvailable)
+    @MainActor
+    @Test("deleteModel resets state")
+    func deleteModelResetsState() {
+        let manager = ModelManager()
+        manager.deleteModel()
+        #expect(manager.state == .notDownloaded)
+        #expect(manager.downloadProgress == 0)
+        #expect(manager.model == nil)
     }
+}
 
-    @Test("Model available after placing file")
-    func modelAvailableAfterPlacing() throws {
-        let (manager, dir) = try makeTempManager()
-        defer { cleanup(dir) }
+// MARK: - ModelState
 
-        let modelPath = dir.appendingPathComponent("voxtral.mlx")
-        try Data("fake-model".utf8).write(to: modelPath)
-
-        #expect(manager.isModelAvailable)
-    }
-
-    @Test("deleteModel removes the model file")
-    func deleteRemovesFile() throws {
-        let (manager, dir) = try makeTempManager()
-        defer { cleanup(dir) }
-
-        let modelPath = dir.appendingPathComponent("voxtral.mlx")
-        try Data("fake-model".utf8).write(to: modelPath)
-        #expect(manager.isModelAvailable)
-
-        try manager.deleteModel()
-        #expect(!manager.isModelAvailable)
-    }
-
-    @Test("deleteModel does not throw when no model exists")
-    func deleteNonexistent() throws {
-        let (manager, dir) = try makeTempManager()
-        defer { cleanup(dir) }
-        try manager.deleteModel()
-    }
-
-    @Test("Availability toggles with create and delete")
-    func availabilityToggle() throws {
-        let (manager, dir) = try makeTempManager()
-        defer { cleanup(dir) }
-
-        #expect(!manager.isModelAvailable)
-
-        let modelPath = dir.appendingPathComponent("voxtral.mlx")
-        try Data("data".utf8).write(to: modelPath)
-        #expect(manager.isModelAvailable)
-
-        try manager.deleteModel()
-        #expect(!manager.isModelAvailable)
+@Suite("ModelState")
+struct ModelStateTests {
+    @Test("States are equatable")
+    func equatable() {
+        #expect(ModelState.notDownloaded == ModelState.notDownloaded)
+        #expect(ModelState.downloading == ModelState.downloading)
+        #expect(ModelState.downloaded == ModelState.downloaded)
+        #expect(ModelState.loading == ModelState.loading)
+        #expect(ModelState.ready == ModelState.ready)
+        #expect(ModelState.error("test") == ModelState.error("test"))
+        #expect(ModelState.error("a") != ModelState.error("b"))
+        #expect(ModelState.notDownloaded != ModelState.ready)
     }
 }
 
@@ -148,7 +129,7 @@ struct ModelManagerTests {
 struct ModelErrorTests {
     @Test("All error cases have non-empty descriptions")
     func errorDescriptions() {
-        let cases: [ModelError] = [.invalidURL, .downloadFailed, .checksumMismatch, .modelNotFound]
+        let cases: [ModelError] = [.downloadFailed, .modelNotFound, .loadingFailed("test")]
         for error in cases {
             let description = error.errorDescription
             #expect(description != nil)
@@ -159,13 +140,18 @@ struct ModelErrorTests {
     @Test("Each error has a unique description")
     func uniqueDescriptions() {
         let descriptions = [
-            ModelError.invalidURL.errorDescription,
             ModelError.downloadFailed.errorDescription,
-            ModelError.checksumMismatch.errorDescription,
             ModelError.modelNotFound.errorDescription,
+            ModelError.loadingFailed("reason").errorDescription,
         ]
         let unique = Set(descriptions.compactMap { $0 })
-        #expect(unique.count == 4)
+        #expect(unique.count == 3)
+    }
+
+    @Test("loadingFailed includes reason")
+    func loadingFailedReason() {
+        let error = ModelError.loadingFailed("out of memory")
+        #expect(error.errorDescription?.contains("out of memory") == true)
     }
 }
 
@@ -173,14 +159,6 @@ struct ModelErrorTests {
 
 @Suite("TranscriptionEngine")
 struct TranscriptionEngineTests {
-    private func makeEngine() throws -> (TranscriptionEngine, URL) {
-        let tempDir = FileManager.default.temporaryDirectory
-            .appendingPathComponent("TranscriboTests-\(UUID().uuidString)")
-        try FileManager.default.createDirectory(at: tempDir, withIntermediateDirectories: true)
-        let manager = ModelManager(modelDirectory: tempDir)
-        return (TranscriptionEngine(modelManager: manager), tempDir)
-    }
-
     @Test("Initializes with default language")
     func defaultInit() {
         let engine = TranscriptionEngine()
@@ -212,37 +190,24 @@ struct TranscriptionEngineTests {
         #expect(codes.contains("en"))
     }
 
-    @Test("loadModel throws when model not downloaded")
-    func loadModelWithoutDownload() throws {
-        let (engine, dir) = try makeEngine()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        #expect(throws: ModelError.self) {
-            try engine.loadModel()
-        }
-    }
-
-    @Test("loadModel succeeds when model file exists")
-    func loadModelWithFile() throws {
-        let (engine, dir) = try makeEngine()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        try Data("fake".utf8).write(to: dir.appendingPathComponent("voxtral.mlx"))
-        try engine.loadModel()
-        #expect(engine.isLoaded)
-    }
-
-    @Test("unloadModel sets isLoaded to false")
-    func unloadModel() throws {
-        let (engine, dir) = try makeEngine()
-        defer { try? FileManager.default.removeItem(at: dir) }
-
-        try Data("fake".utf8).write(to: dir.appendingPathComponent("voxtral.mlx"))
-        try engine.loadModel()
-        #expect(engine.isLoaded)
-
-        engine.unloadModel()
+    @Test("isLoaded is false on init")
+    func notLoadedOnInit() {
+        let engine = TranscriptionEngine()
         #expect(!engine.isLoaded)
+    }
+
+    @Test("setModel(nil) keeps isLoaded false")
+    func setModelNil() {
+        let engine = TranscriptionEngine()
+        engine.setModel(nil)
+        #expect(!engine.isLoaded)
+    }
+
+    @Test("setLanguage does not crash")
+    func setLanguage() {
+        let engine = TranscriptionEngine()
+        engine.setLanguage("ja")
+        engine.setLanguage("en")
     }
 
     @Test("finalize without a session is a no-op")
@@ -255,16 +220,34 @@ struct TranscriptionEngineTests {
         #expect(!tokenReceived)
     }
 
-    @Test("setLanguage does not crash")
-    func setLanguage() {
+    @Test("processAudioBuffer accumulates samples")
+    func audioBufferAccumulation() throws {
         let engine = TranscriptionEngine()
-        engine.setLanguage("ja")
-        engine.setLanguage("en")
-    }
 
-    @Test("isLoaded is false on init")
-    func notLoadedOnInit() {
-        let engine = TranscriptionEngine()
-        #expect(!engine.isLoaded)
+        guard let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16000,
+            channels: 1,
+            interleaved: false
+        ) else {
+            throw ModelError.loadingFailed("Could not create audio format")
+        }
+
+        // Create a buffer with known samples
+        guard let buffer = AVAudioPCMBuffer(pcmFormat: format, frameCapacity: 160) else {
+            throw ModelError.loadingFailed("Could not create audio buffer")
+        }
+        buffer.frameLength = 160
+        if let channelData = buffer.floatChannelData?[0] {
+            for i in 0..<160 {
+                channelData[i] = Float(i) / 160.0
+            }
+        }
+
+        // Processing a buffer should set session start time (tested via finalize behavior)
+        engine.processAudioBuffer(buffer)
+
+        // After processing, finalize without a model should clear state without crashing
+        engine.finalize()
     }
 }

@@ -1,7 +1,9 @@
 import Cocoa
 
+@MainActor
 final class MenuBarManager {
     private var statusItem: NSStatusItem?
+    var onOpenSettings: (() -> Void)?
 
     func setup() {
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -31,9 +33,12 @@ final class MenuBarManager {
         )
     }
 
+    func setModelStatus(_ text: String) {
+        statusItem?.button?.toolTip = "Transcribo — \(text)"
+    }
+
     @objc private func openSettings() {
-        NSApp.sendAction(Selector(("showSettingsWindow:")), to: nil, from: nil)
-        NSApp.activate(ignoringOtherApps: true)
+        onOpenSettings?()
     }
 
     @objc private func openHistory() {
