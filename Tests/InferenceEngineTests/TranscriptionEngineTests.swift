@@ -150,8 +150,9 @@ struct ModelErrorTests {
     func errorDescriptions() {
         let cases: [ModelError] = [.invalidURL, .downloadFailed, .checksumMismatch, .modelNotFound]
         for error in cases {
-            #expect(error.errorDescription != nil)
-            #expect(!error.errorDescription!.isEmpty)
+            let description = error.errorDescription
+            #expect(description != nil)
+            #expect(!(description ?? "").isEmpty)
         }
     }
 

@@ -103,7 +103,7 @@ struct AboutTab: View {
         VStack(spacing: 12) {
             Image(systemName: "waveform")
                 .font(.system(size: 48))
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.accentColor)
             Text("Transcribo")
                 .font(.title)
             Text("Version 1.0.0")

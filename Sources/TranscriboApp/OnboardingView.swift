@@ -71,7 +71,7 @@ struct OnboardingView: View {
         VStack(spacing: 16) {
             Image(systemName: "waveform")
                 .font(.system(size: 56))
-                .foregroundStyle(.accent)
+                .foregroundStyle(Color.accentColor)
             Text("Welcome to Transcribo")
                 .font(.title)
                 .bold()
@@ -137,7 +137,7 @@ struct OnboardingView: View {
         VStack(spacing: 16) {
             Image(systemName: modelDownloaded ? "checkmark.circle.fill" : "arrow.down.circle")
                 .font(.system(size: 48))
-                .foregroundStyle(modelDownloaded ? .green : .accent)
+                .foregroundStyle(modelDownloaded ? .green : Color.accentColor)
             Text("Download Model")
                 .font(.title2)
                 .bold()

@@ -29,7 +29,11 @@ struct HistoryView: View {
                 ContentUnavailableView(
                     "No Transcriptions",
                     systemImage: "waveform.slash",
-                    description: Text(searchText.isEmpty ? "Your transcription history will appear here." : "No results for \"\(searchText)\".")
+                    description: Text(
+                        searchText.isEmpty
+                            ? "Your transcription history will appear here."
+                            : "No results for \"\(searchText)\"."
+                    )
                 )
             } else {
                 List {
