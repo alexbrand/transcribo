@@ -4,8 +4,12 @@ import Foundation
 public final class ModelManager {
     /// Default directory where model files are stored.
     public static let defaultModelDirectory: URL = {
-        // swiftlint:disable:next force_unwrapping
-        let appSupport = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first!
+        guard let appSupport = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        ).first else {
+            fatalError("Application Support directory not found")
+        }
         return appSupport.appendingPathComponent("Transcribo/models", isDirectory: true)
     }()
 

@@ -7,13 +7,17 @@ public final class AudioCaptureSession {
     private var isCapturing = false
 
     /// The audio format used for inference: 16 kHz, mono, Float32.
-    // swiftlint:disable:next force_unwrapping
-    public static let inferenceFormat = AVAudioFormat(
-        commonFormat: .pcmFormatFloat32,
-        sampleRate: 16000,
-        channels: 1,
-        interleaved: false
-    )!
+    public static let inferenceFormat: AVAudioFormat = {
+        guard let format = AVAudioFormat(
+            commonFormat: .pcmFormatFloat32,
+            sampleRate: 16000,
+            channels: 1,
+            interleaved: false
+        ) else {
+            fatalError("Failed to create inference audio format")
+        }
+        return format
+    }()
 
     public init() {}
 
