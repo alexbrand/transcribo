@@ -101,8 +101,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate {
             let view = SettingsView()
                 .environment(modelManager)
             let window = NSWindow(
-                contentRect: NSRect(x: 0, y: 0, width: 450, height: 300),
-                styleMask: [.titled, .closable],
+                contentRect: NSRect(x: 0, y: 0, width: 760, height: 620),
+                styleMask: [.titled, .closable, .miniaturizable],
                 backing: .buffered,
                 defer: false
             )

@@ -7,55 +7,159 @@ import TextInjection
 
 struct SettingsView: View {
     var body: some View {
-        TabView {
-            GeneralSettingsTab()
-                .tabItem {
-                    Label("General", systemImage: "gear")
-                }
+        ZStack {
+            LinearGradient(
+                colors: [
+                    Color(nsColor: .windowBackgroundColor),
+                    Color(nsColor: .underPageBackgroundColor),
+                ],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
 
-            LanguageSettingsTab()
-                .tabItem {
-                    Label("Language", systemImage: "globe")
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    SettingsHeader()
+                    GeneralSettingsSection()
+                    LanguageSettingsSection()
+                    ModelSettingsSection()
+                    AboutSection()
                 }
-
-            ModelSettingsTab()
-                .tabItem {
-                    Label("Model", systemImage: "cpu")
-                }
-
-            AboutTab()
-                .tabItem {
-                    Label("About", systemImage: "info.circle")
-                }
+                .padding(.horizontal, 24)
+                .padding(.vertical, 20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
         }
-        .frame(width: 450, height: 300)
+        .frame(width: 760, height: 620)
+    }
+}
+
+struct SettingsHeader: View {
+    var body: some View {
+        HStack(alignment: .top, spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        LinearGradient(
+                            colors: [Color.blue.opacity(0.9), Color.cyan.opacity(0.75)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                Image(systemName: "waveform.and.magnifyingglass")
+                    .font(.system(size: 20, weight: .semibold))
+                    .foregroundStyle(.white)
+            }
+            .frame(width: 48, height: 48)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Transcribo Settings")
+                    .font(.system(size: 24, weight: .bold))
+                Text("Configure permissions, model behavior, and transcription defaults.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(2)
+    }
+}
+
+struct SettingsCard<Content: View>: View {
+    let title: String
+    let icon: String
+    let iconColor: Color
+    @ViewBuilder var content: Content
+
+    init(
+        title: String,
+        icon: String,
+        iconColor: Color = .accentColor,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.title = title
+        self.icon = icon
+        self.iconColor = iconColor
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundStyle(iconColor)
+                    .frame(width: 24, height: 24)
+                    .background(iconColor.opacity(0.14), in: RoundedRectangle(cornerRadius: 7))
+                Text(title)
+                    .font(.title3.weight(.semibold))
+            }
+
+            content
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(Color(nsColor: .controlBackgroundColor).opacity(0.85))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .strokeBorder(Color.primary.opacity(0.08), lineWidth: 1)
+        )
+    }
+}
+
+struct SectionSubtext: View {
+    let text: String
+
+    var body: some View {
+        Text(text)
+            .font(.caption)
+            .foregroundStyle(.secondary)
+            .lineLimit(nil)
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 
 // MARK: - General
 
-struct GeneralSettingsTab: View {
+struct GeneralSettingsSection: View {
     @AppStorage("launchAtLogin") private var launchAtLogin = false
     @AppStorage("shortcutKeyCode") private var shortcutKeyCode = 0x3D
     @State private var micStatus = AVCaptureDevice.authorizationStatus(for: .audio)
     @State private var accessibilityGranted = TextInjector.isAccessibilityGranted
 
     var body: some View {
-        Form {
-            if !accessibilityGranted {
-                Label("Accessibility access is required for text insertion.", systemImage: "exclamationmark.triangle.fill")
-                    .foregroundStyle(.red)
-            }
+        SettingsCard(title: "General", icon: "slider.horizontal.3", iconColor: .blue) {
+            VStack(alignment: .leading, spacing: 12) {
+                if !accessibilityGranted {
+                    Label("Accessibility access is required for text insertion.", systemImage: "exclamationmark.triangle.fill")
+                        .font(.subheadline.weight(.medium))
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 8)
+                        .background(Color.orange.opacity(0.14), in: RoundedRectangle(cornerRadius: 8))
+                        .foregroundStyle(.orange)
+                        .lineLimit(nil)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
 
-            Toggle("Launch at login", isOn: $launchAtLogin)
+                Toggle("Launch at login", isOn: $launchAtLogin)
+                    .toggleStyle(.switch)
 
-            LabeledContent("Push-to-talk shortcut") {
-                Text("Right Option (⌥)")
-                    .foregroundStyle(.secondary)
-            }
+                LabeledContent("Push-to-talk shortcut") {
+                    Text("Right Option (⌥)")
+                        .foregroundStyle(.secondary)
+                }
+                SectionSubtext(text: "Hold the shortcut to record and release to transcribe.")
 
-            Section("Permissions") {
-                LabeledContent("Status") {
+                Divider()
+
+                LabeledContent("Microphone") {
                     Text(microphoneStatusText)
                         .foregroundStyle(microphoneStatusColor)
                 }
@@ -67,7 +171,7 @@ struct GeneralSettingsTab: View {
                         }
                     }
                 } else if micStatus == .denied || micStatus == .restricted {
-                    Button("Open System Settings") {
+                    Button("Open Microphone Settings") {
                         openMicrophoneSettings()
                     }
                 }
@@ -80,16 +184,18 @@ struct GeneralSettingsTab: View {
                 }
 
                 if !accessibilityGranted {
-                    Button("Grant Accessibility Access") {
-                        TextInjector.requestAccessibilityPermission()
-                    }
-                    Button("Open Accessibility Settings") {
-                        openAccessibilitySettings()
+                    HStack(spacing: 10) {
+                        Button("Grant Accessibility Access") {
+                            TextInjector.requestAccessibilityPermission()
+                        }
+                        Button("Open Accessibility Settings") {
+                            openAccessibilitySettings()
+                        }
                     }
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
         .onAppear {
             refreshMicStatus()
             refreshAccessibilityStatus()
@@ -152,7 +258,7 @@ struct GeneralSettingsTab: View {
 
 // MARK: - Language
 
-struct LanguageSettingsTab: View {
+struct LanguageSettingsSection: View {
     @AppStorage("transcriptionLanguage") private var language = "en"
 
     private let supportedLanguages: [(code: String, name: String)] = [
@@ -168,54 +274,67 @@ struct LanguageSettingsTab: View {
     ]
 
     var body: some View {
-        Form {
-            Picker("Transcription language", selection: $language) {
-                ForEach(supportedLanguages, id: \.code) { lang in
-                    Text(lang.name).tag(lang.code)
+        SettingsCard(title: "Language", icon: "globe", iconColor: .teal) {
+            VStack(alignment: .leading, spacing: 12) {
+                Picker("Transcription language", selection: $language) {
+                    ForEach(supportedLanguages, id: \.code) { lang in
+                        Text(lang.name).tag(lang.code)
+                    }
                 }
+                .pickerStyle(.menu)
+                SectionSubtext(text: "Choose the language that best matches incoming speech for better recognition quality.")
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
     }
 }
 
 // MARK: - Model
 
-struct ModelSettingsTab: View {
+struct ModelSettingsSection: View {
     @Environment(ModelManager.self) private var modelManager
     @AppStorage("hfToken") private var hfToken = ""
 
     var body: some View {
-        Form {
-            LabeledContent("Model") {
-                Text("Voxtral Mini 4B (4-bit, ~3.1 GB)")
-                    .foregroundStyle(.secondary)
-            }
+        SettingsCard(title: "Model", icon: "cpu", iconColor: .indigo) {
+            VStack(alignment: .leading, spacing: 12) {
+                LabeledContent("Model") {
+                    Text("Voxtral Mini 4B (4-bit, ~3.1 GB)")
+                        .foregroundStyle(.secondary)
+                }
 
-            LabeledContent("Status") {
-                statusView
-            }
+                LabeledContent("Status") {
+                    statusView
+                }
 
-            actionButton
+                actionButton
 
-            Section {
+                Divider()
+
                 SecureField("HuggingFace Token (optional)", text: $hfToken)
-                Text("Speeds up downloads and avoids rate limits. Get one at huggingface.co/settings/tokens")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
+                    .textFieldStyle(.roundedBorder)
 
-            Section("Diagnostics") {
+                SectionSubtext(text: "Speeds up downloads and avoids rate limits. Get one at huggingface.co/settings/tokens")
+
+                Divider()
+
+                Text("Download details")
+                    .font(.subheadline.weight(.semibold))
+
                 Text(modelManager.downloadStatus)
                     .foregroundStyle(.secondary)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
+
                 Text(ModelManager.diagnosticsLogPath)
-                    .font(.caption2)
+                    .font(.caption.monospaced())
                     .foregroundStyle(.secondary)
                     .textSelection(.enabled)
-                    .lineLimit(2)
+                    .lineLimit(nil)
+                    .fixedSize(horizontal: false, vertical: true)
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
     }
 
     @ViewBuilder
@@ -228,7 +347,7 @@ struct ModelSettingsTab: View {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 8) {
                     ProgressView(value: modelManager.downloadProgress)
-                        .frame(width: 100)
+                        .frame(width: 160)
                     Text("\(Int(modelManager.downloadProgress * 100))%")
                         .monospacedDigit()
                         .foregroundStyle(.secondary)
@@ -253,7 +372,8 @@ struct ModelSettingsTab: View {
         case .error(let msg):
             Text(msg)
                 .foregroundStyle(.red)
-                .lineLimit(2)
+                .lineLimit(nil)
+                .fixedSize(horizontal: false, vertical: true)
         }
     }
 
@@ -286,19 +406,25 @@ struct ModelSettingsTab: View {
 
 // MARK: - About
 
-struct AboutTab: View {
+struct AboutSection: View {
     var body: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "waveform")
-                .font(.system(size: 48))
-                .foregroundStyle(Color.accentColor)
-            Text("Transcribo")
-                .font(.title)
-            Text("Version 1.0.0")
-                .foregroundStyle(.secondary)
-            Text("Privacy-first voice transcription for macOS.")
-                .foregroundStyle(.secondary)
+        SettingsCard(title: "About", icon: "info.circle", iconColor: .mint) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 12) {
+                    Image(systemName: "waveform.badge.mic")
+                        .font(.system(size: 32))
+                        .foregroundStyle(Color.blue)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Transcribo")
+                            .font(.headline)
+                        Text("Version 1.0.0")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Text("Privacy-first voice transcription for macOS.")
+                    .foregroundStyle(.secondary)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
-        .padding()
     }
 }
